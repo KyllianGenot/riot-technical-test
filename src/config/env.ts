@@ -2,14 +2,15 @@ const DEFAULT_PORT = 3000;
 
 export interface Env {
   port: number;
+  hmacSecret: string;
 }
 
-export function loadEnv(): Env {
-  return { port: readPort() };
+export function loadEnv(source: NodeJS.ProcessEnv = process.env): Env {
+  return { port: readPort(source), hmacSecret: readHmacSecret(source) };
 }
 
-function readPort(): number {
-  const raw = process.env.PORT;
+function readPort(source: NodeJS.ProcessEnv): number {
+  const raw = source.PORT;
   if (raw === undefined || raw === '') {
     return DEFAULT_PORT;
   }
@@ -20,4 +21,14 @@ function readPort(): number {
     );
   }
   return port;
+}
+
+function readHmacSecret(source: NodeJS.ProcessEnv): string {
+  const secret = source.HMAC_SECRET;
+  if (secret === undefined || secret === '') {
+    throw new Error(
+      'HMAC_SECRET must be set to a non-empty value (see .env.example)',
+    );
+  }
+  return secret;
 }
