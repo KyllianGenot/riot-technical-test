@@ -5,7 +5,9 @@ import { createApp } from './app.js';
 
 describe('createApp', () => {
   it('serves HTTP requests and rejects unknown routes', async () => {
-    const response = await request(createApp()).post('/unknown').send({});
+    const response = await request(createApp({ hmacSecret: 'test-secret' }))
+      .post('/unknown')
+      .send({});
 
     expect(response.status).toBe(404);
   });
