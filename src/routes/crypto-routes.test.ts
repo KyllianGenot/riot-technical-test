@@ -97,13 +97,49 @@ describe('POST /sign', () => {
 
     expect(first.body.signature).toBe(second.body.signature);
   });
+
+  it.each<[string, unknown]>([
+    ['an array', ['a', 'b']],
+    ['a string', 'hello'],
+    ['a number', 42],
+    ['a boolean', true],
+    ['null', null],
+  ])('signs %s at the root', async (_case, body) => {
+    const response = await postRaw('/sign', JSON.stringify(body));
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({
+      signature: expect.stringMatching(/^[0-9a-f]{64}$/),
+    });
+  });
+
+  it('returns 400 when the body is not JSON at all', async () => {
+    const response = await request(app)
+      .post('/sign')
+      .set('Content-Type', 'text/plain')
+      .send('hello');
+
+    expect(response.status).toBe(400);
+    expect(response.body).toEqual({
+      error: 'Request body must be a JSON value',
+    });
+  });
+
+  it('returns a JSON 400 for malformed JSON', async () => {
+    const response = await postRaw('/sign', '{"broken"');
+
+    expect(response.status).toBe(400);
+    expect(response.body).toEqual({
+      error: 'Request body must be valid JSON',
+    });
+  });
 });
 
 describe('POST /verify', () => {
   const data = { message: 'Hello World', timestamp: 1616161616 };
 
   const signatureOf = async (payload: unknown): Promise<string> => {
-    const response = await postJson('/sign', payload);
+    const response = await postRaw('/sign', JSON.stringify(payload));
     return response.body.signature as string;
   };
 
@@ -161,20 +197,33 @@ describe('POST /verify', () => {
     expect(response.body).toEqual({ error: 'signature must be a string' });
   });
 
-  it.each([
-    ['missing', undefined],
+  it.each<[string, unknown]>([
+    ['an array', ['a', 'b']],
+    ['a string', 'hello'],
+    ['a number', 42],
+    ['a boolean', true],
     ['null', null],
-    ['an array', [1, 2]],
-    ['a string', 'text'],
-  ])('returns 400 when data is %s', async (_case, data) => {
-    const response = await postJson('/verify', { signature: 'abcd', data });
+  ])(
+    'returns 204 when data is %s and the signature matches',
+    async (_case, value) => {
+      const response = await postJson('/verify', {
+        signature: await signatureOf(value),
+        data: value,
+      });
+
+      expect(response.status).toBe(204);
+    },
+  );
+
+  it('returns 400 when data is missing', async () => {
+    const response = await postJson('/verify', { signature: 'abcd' });
 
     expect(response.status).toBe(400);
-    expect(response.body).toEqual({ error: 'data must be a JSON object' });
+    expect(response.body).toEqual({ error: 'data is required' });
   });
 });
 
-describe.each(['/encrypt', '/decrypt', '/sign', '/verify'])(
+describe.each(['/encrypt', '/decrypt', '/verify'])(
   'POST %s with an invalid root body',
   (path) => {
     it.each([

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import type { JsonValue } from '../json/json-types.js';
 import { HmacSignatureAlgorithm } from './hmac-signature-algorithm.js';
 import { signPayload, verifyPayloadSignature } from './payload-signature.js';
 
@@ -50,6 +51,33 @@ describe('signPayload', () => {
     const reordered = signPayload({ tags: ['b', 'a'] }, algorithm);
 
     expect(reordered).not.toBe(original);
+  });
+});
+
+describe('signPayload with a non-object root', () => {
+  it.each<[string, JsonValue]>([
+    ['an array', ['a', { b: 1 }]],
+    ['a string', 'hello'],
+    ['a number', 42],
+    ['a boolean', true],
+    ['null', null],
+  ])('signs %s and verifies the result', (_case, value) => {
+    const signature = signPayload(value, algorithm);
+
+    expect(signature).toMatch(/^[0-9a-f]{64}$/);
+    expect(verifyPayloadSignature(value, signature, algorithm)).toBe(true);
+  });
+
+  it('keeps root array order significant', () => {
+    expect(signPayload(['a', 'b'], algorithm)).not.toBe(
+      signPayload(['b', 'a'], algorithm),
+    );
+  });
+
+  it('ignores property order of objects inside a root array', () => {
+    expect(signPayload([{ b: 1, a: 2 }], algorithm)).toBe(
+      signPayload([{ a: 2, b: 1 }], algorithm),
+    );
   });
 });
 

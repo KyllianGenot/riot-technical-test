@@ -5,7 +5,7 @@ import {
   decryptPayload,
   encryptPayload,
 } from '../encryption/payload-encryption.js';
-import { isJsonObject } from '../json/json-types.js';
+import { isJsonObject, isJsonValue } from '../json/json-types.js';
 import {
   signPayload,
   verifyPayloadSignature,
@@ -38,8 +38,8 @@ export function createCryptoRoutes(
 
   router.post('/sign', (req, res) => {
     const body: unknown = req.body;
-    if (!isJsonObject(body)) {
-      badRequest(res, 'Request body must be a JSON object');
+    if (!isJsonValue(body)) {
+      badRequest(res, 'Request body must be a JSON value');
       return;
     }
     res.json({ signature: signPayload(body, signatureAlgorithm) });
@@ -56,8 +56,9 @@ export function createCryptoRoutes(
       badRequest(res, 'signature must be a string');
       return;
     }
-    if (!isJsonObject(data)) {
-      badRequest(res, 'data must be a JSON object');
+    // Any JSON value is signable, including null; only absence is an error.
+    if (!Object.hasOwn(body, 'data')) {
+      badRequest(res, 'data is required');
       return;
     }
     if (!verifyPayloadSignature(data, signature, signatureAlgorithm)) {

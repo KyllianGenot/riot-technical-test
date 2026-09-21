@@ -42,7 +42,7 @@ Send `Content-Type: application/json`. Every endpoint returns JSON, except a suc
 
 ### POST /encrypt
 
-Encrypts every top-level property value. A nested object or array is encrypted as one value.
+Encrypts every top-level property value. A nested object or array is encrypted as one value. Values are JSON-serialized and internally tagged before Base64 encoding, so `/decrypt` can restore their original JSON type and tell them apart from ordinary Base64-looking strings.
 
 ```json
 {
@@ -78,7 +78,7 @@ Response `200`:
 
 ### POST /sign
 
-Returns the HMAC-SHA256 signature of the whole payload as lowercase hexadecimal. Property order does not change the result; array order does.
+Returns the HMAC-SHA256 signature of the whole payload as lowercase hexadecimal. The body may be any JSON value: object, array, string, number, boolean or `null`. Property order does not change the result; array order does.
 
 ```json
 { "message": "Hello World", "timestamp": 1616161616 }
@@ -92,7 +92,7 @@ Response `200`:
 
 ### POST /verify
 
-`signature` is the value returned by `/sign` for the same logical payload.
+`signature` is the value returned by `/sign` for the same logical payload. The wrapper itself must be a JSON object; `data` must be present and may be any JSON value, including `null`.
 
 ```json
 {
@@ -108,12 +108,13 @@ Response `200`:
 
 Rejected requests return `400` with `{ "error": "<message>" }`:
 
-| Case                                                                                               | Message                              |
-| -------------------------------------------------------------------------------------------------- | ------------------------------------ |
-| Body is not a JSON object: `null`, array, string, number, boolean, or the content type is not JSON | `Request body must be a JSON object` |
-| Body cannot be parsed as JSON                                                                      | `Request body must be valid JSON`    |
-| `/verify` without a string `signature`                                                             | `signature must be a string`         |
-| `/verify` without an object `data`                                                                 | `data must be a JSON object`         |
+| Case                                                                                                                                   | Message                              |
+| -------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------ |
+| `/encrypt`, `/decrypt` or `/verify` body is not a JSON object: `null`, array, string, number, boolean, or the content type is not JSON | `Request body must be a JSON object` |
+| `/sign` without a JSON body (the content type is not JSON)                                                                             | `Request body must be a JSON value`  |
+| Body cannot be parsed as JSON                                                                                                          | `Request body must be valid JSON`    |
+| `/verify` without a string `signature`                                                                                                 | `signature must be a string`         |
+| `/verify` without `data`                                                                                                               | `data is required`                   |
 
 ## Design decisions
 
@@ -128,7 +129,7 @@ src/
   json/         JSON value types and canonicalization
 ```
 
-- **Root payloads are JSON objects.** The challenge defines its operations around top-level properties and all provided payload examples are objects, so the API deliberately accepts JSON objects at the root and rejects `null`, arrays and primitives with a `400`.
+- **Root payload shapes follow each operation.** `/encrypt` and `/decrypt` work on top-level properties, so they require a JSON object at the root and reject `null`, arrays and primitives with a `400`. Signing is defined over any JSON value, so `/sign` accepts any JSON value and `/verify` accepts any JSON value as `data`; the `/verify` wrapper itself remains an object.
 - **Algorithms sit behind two interfaces.** `EncryptionAlgorithm` and `SignatureAlgorithm` each have one concrete implementation, passed down as plain parameters. Concrete algorithms are selected in `app.ts`; replacing one does not require changes to the payload logic or HTTP routes. There is no factory or dependency-injection container because the current scope does not justify one.
 - **The Base64 implementation only transforms strings.** JSON serialization, depth-1 traversal and protocol detection all live in `payload-encryption.ts`, so a replacement algorithm inherits them unchanged.
 - **Encrypted values carry a marker.** Each value is `JSON.stringify`'d, prefixed with `enc:`, then Base64 encoded. On decryption the marker tells this API's values apart from ordinary strings that happen to be valid Base64, and `JSON.parse` restores the original type: a number comes back as a number, an object as an object. Values without the marker, or with unparsable content after it, are returned untouched.

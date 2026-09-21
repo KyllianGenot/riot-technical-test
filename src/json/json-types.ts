@@ -12,3 +12,15 @@ export type JsonArray = JsonValue[];
 export function isJsonObject(value: unknown): value is JsonObject {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
+
+// Shallow: request bodies come from express.json(), so this only tells a
+// parsed JSON value apart from an absent body (req.body === undefined).
+export function isJsonValue(value: unknown): value is JsonValue {
+  return (
+    value === null ||
+    typeof value === 'string' ||
+    typeof value === 'number' ||
+    typeof value === 'boolean' ||
+    typeof value === 'object'
+  );
+}
